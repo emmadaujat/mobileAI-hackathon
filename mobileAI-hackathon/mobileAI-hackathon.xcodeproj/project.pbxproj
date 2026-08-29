@@ -256,6 +256,9 @@
 				DEVELOPMENT_TEAM = 7QM29CTKRM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TapGuide;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TapGuide listens when you tap the mic so it can understand what you're trying to do on your phone.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "TapGuide converts your spoken request into text so it can help you find the right app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +291,9 @@
 				DEVELOPMENT_TEAM = 7QM29CTKRM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = TapGuide;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "TapGuide listens when you tap the mic so it can understand what you're trying to do on your phone.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "TapGuide converts your spoken request into text so it can help you find the right app.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
