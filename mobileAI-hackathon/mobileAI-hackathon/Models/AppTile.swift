@@ -36,6 +36,6 @@ struct AppTile: Identifiable, Equatable {
         AppTile(id: "settings", displayName: "Settings", systemImage: "gearshape.fill", tint: .gray,
                 explanation: "This is Settings. Tap it to change how your phone works."),
         AppTile(id: "appstore", displayName: "App Store", systemImage: "bag.fill", tint: .blue,
-                explanation: "This is the App Store. Tap it to download new apps.")
+                explanation: "Th is the App Store. Tap it to download new apps.")
     ]
 }
