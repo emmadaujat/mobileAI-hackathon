@@ -1,73 +1,123 @@
-import AVFoundation
 
-/// Calls the ElevenLabs text-to-speech API and plays back the returned audio.
-/// See https://elevenlabs.io/docs/api-reference/text-to-speech for details.
-final class ElevenLabsTextToSpeechService: NSObject, TextToSpeechServicing {
-    private var player: AVAudioPlayer?
-    private let session = URLSession(configuration: .default)
-    private let apiKeyProvider: () -> String?
-    private let voiceID: String
-    private let fallback = SystemTextToSpeechService()
+import Foundation
 
-    /// - Parameters:
-    ///   - apiKeyProvider: closure returning the current API key, so a key
-    ///     typed into Settings mid-demo is picked up immediately without
-    ///     rebuilding the app.
-    ///   - voiceID: an ElevenLabs voice ID. "21m00Tcm4TlvDq8ikWAM" is the
-    ///     default "Rachel" voice — swap for whichever voice you pick in the
-    ///     ElevenLabs dashboard.
-    init(apiKeyProvider: @escaping () -> String?, voiceID: String = "21m00Tcm4TlvDq8ikWAM") {
-        self.apiKeyProvider = apiKeyProvider
-        self.voiceID = voiceID
+@MainActor
+final class ElevenLabsScribeService: VoiceInputService {
+    private let recorder = AudioFileRecorder()
+    private let session: URLSession
+    private(set) var isListening = false
+
+    /// Backstop for `recordAudio()` — see that method's header comment.
+    private static let hardRecordingTimeout: TimeInterval = 25
+
+    private let modelID = "scribe_v1"
+
+    init(session: URLSession = .shared) {
+        self.session = session
     }
 
-    func speak(_ text: String) {
-        guard let apiKey = apiKeyProvider(), !apiKey.isEmpty else {
-            print("[ElevenLabs] No API key set — falling back to the built-in voice.")
-            fallback.speak(text)
-            return
+    func startListening(onPartialTranscript: @escaping (String) -> Void) async throws -> String {
+        guard APIKeys.hasElevenLabsKey else {
+            throw VoiceInputError.transcriptionFailed("No ElevenLabs API key configured (see APIKeys.swift).")
         }
 
-        guard let url = URL(string: "https://api.elevenlabs.io/v1/text-to-speech/\(voiceID)") else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "xi-api-key")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("audio/mpeg", forHTTPHeaderField: "Accept")
+        isListening = true
+        defer { isListening = false }
 
-        let body: [String: Any] = [
-            "text": text,
-            "model_id": "eleven_multilingual_v2",
-            "voice_settings": ["stability": 0.5, "similarity_boost": 0.75]
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        let fileURL = try await recordAudio()
 
-        session.dataTask(with: request) { [weak self] data, response, error in
-            guard let self, let data, error == nil,
-                  (response as? HTTPURLResponse)?.statusCode == 200 else {
-                print("[ElevenLabs] TTS request failed (\(error?.localizedDescription ?? "bad response")) — falling back to the built-in voice.")
-                DispatchQueue.main.async { self?.fallback.speak(text) }
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        return try await transcribe(fileURL: fileURL)
+    }
+
+    private func recordAudio() async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            let resume = ResumeOnce(continuation)
+
+            do {
+                try recorder.start { result in
+                    switch result {
+                    case .success(let url): resume.fulfill(returning: url)
+                    case .failure(let error): resume.fulfill(throwing: error)
+                    }
+                }
+            } catch {
+                resume.fulfill(throwing: VoiceInputError.microphoneUnavailable)
                 return
             }
-            DispatchQueue.main.async {
-                self.play(data: data)
-            }
-        }.resume()
-    }
 
-    private func play(data: Data) {
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
-            player = try AVAudioPlayer(data: data)
-            player?.play()
-        } catch {
-            print("[ElevenLabs] Playback failed: \(error)")
+            Task { [recorder] in
+                try? await Task.sleep(nanoseconds: UInt64(Self.hardRecordingTimeout * 1_000_000_000))
+                recorder.stop() // resolves the completion itself if still pending
+                resume.fulfill(throwing: VoiceInputError.noSpeechDetected) // no-op if already resolved
+            }
         }
     }
 
-    func stop() {
-        player?.stop()
-        fallback.stop()
+    func stopListening() {
+        recorder.stop()
+        isListening = false
+    }
+
+    // MARK: - Upload
+    private func transcribe(fileURL: URL) async throws -> String {
+        var request = URLRequest(url: URL(string: "https://api.elevenlabs.io/v1/speech-to-text")!)
+        request.httpMethod = "POST"
+        request.setValue(APIKeys.elevenLabsAPIKey, forHTTPHeaderField: "xi-api-key")
+
+        let boundary = "TapTalk-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        let audioData = try Data(contentsOf: fileURL)
+        var body = Data()
+
+        func appendField(name: String, value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+
+        appendField(name: "model_id", value: modelID)
+
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+        body.append(audioData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw VoiceInputError.network(error)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let bodyText = String(data: data, encoding: .utf8) ?? ""
+            throw VoiceInputError.transcriptionFailed("ElevenLabs returned status \(statusCode): \(bodyText)")
+        }
+
+        let decoded = try JSONDecoder().decode(ScribeResponse.self, from: data)
+        let text = decoded.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            throw VoiceInputError.noSpeechDetected
+        }
+        return text
+    }
+
+    private struct ScribeResponse: Decodable {
+        let text: String
+        let languageCode: String?
+
+        enum CodingKeys: String, CodingKey {
+            case text
+            case languageCode = "language_code"
+        }
     }
 }

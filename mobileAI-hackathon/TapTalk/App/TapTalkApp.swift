@@ -2,7 +2,17 @@
 //  TapTalkApp.swift
 //  TapTalk
 //
-//  Created by Emma Daujat on 29/8/2026.
-//
 
-import Foundation
+import SwiftUI
+
+@main
+struct TapTalkApp: App {
+    @StateObject private var coordinator = AppCoordinator()
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(coordinator)
+        }
+    }
+}

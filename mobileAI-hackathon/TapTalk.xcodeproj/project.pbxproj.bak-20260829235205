@@ -79,6 +79,8 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				AA0C59D23043240E001FF12D /* TapTalkTests */,
+				AA0C59D33043241F001FF12D /* TapTalkBroadcastExtension */,
 				AA0C59D43043242D001FF12D /* Shared */,
 				AA77548730427831004FAB5F /* TapTalk */,
 			);

@@ -1,41 +1,65 @@
-import SwiftUI
+//
+//  PTVSimStep.swift
+//  TapTalk
+//
+//  Steps of the simulated PTV walkthrough (v1 stand-in for the real PTV app —
+//  see ScreenGuidance/SimulatedPTVGuidanceService.swift). Each step pairs a
+//  visual screen with the caption TapTalk speaks/shows at that point, taken
+//  directly from the user flow doc's step-by-step script.
+//
 
-/// A single mock "app icon" on the simulated home screen. These are generic
-/// SF Symbol tiles, not real app artwork, so the prototype doesn't depend on
-/// (or infringe on) anyone else's icons.
-struct AppTile: Identifiable, Equatable {
-    let id: String
-    let displayName: String
-    let systemImage: String
-    let tint: Color
-    /// Short, plain-language description spoken when someone taps the icon
-    /// once with Tap-to-Explain turned on.
-    let explanation: String
+import Foundation
 
-    static let all: [AppTile] = [
-        AppTile(id: "phone", displayName: "Phone", systemImage: "phone.fill", tint: .green,
-                explanation: "This is Phone. Tap it to call someone in your contacts."),
-        AppTile(id: "messages", displayName: "Messages", systemImage: "message.fill", tint: .green,
-                explanation: "This is Messages. Tap it to read or send a text."),
-        AppTile(id: "camera", displayName: "Camera", systemImage: "camera.fill", tint: .gray,
-                explanation: "This is Camera. Tap it to take a photo."),
-        AppTile(id: "photos", displayName: "Photos", systemImage: "photo.on.rectangle", tint: .pink,
-                explanation: "This is Photos. Tap it to see pictures you've taken."),
-        AppTile(id: "mail", displayName: "Mail", systemImage: "envelope.fill", tint: .blue,
-                explanation: "This is Mail. Tap it to read your email."),
-        AppTile(id: "weather", displayName: "Weather", systemImage: "cloud.sun.fill", tint: .cyan,
-                explanation: "This is Weather. Tap it to see today's forecast."),
-        AppTile(id: "music", displayName: "Music", systemImage: "music.note", tint: .red,
-                explanation: "This is Music. Tap it to play a song."),
-        AppTile(id: "maps", displayName: "Maps", systemImage: "map.fill", tint: .green,
-                explanation: "This is Maps. Tap it to get directions somewhere."),
-        AppTile(id: "ptv", displayName: "PTV", systemImage: "tram.fill", tint: .indigo,
-                explanation: "This is PTV. Tap it to check train, tram and bus times in Melbourne."),
-        AppTile(id: "health", displayName: "Health", systemImage: "heart.fill", tint: .red,
-                explanation: "This is Health. Tap it to see your step count and health data."),
-        AppTile(id: "settings", displayName: "Settings", systemImage: "gearshape.fill", tint: .gray,
-                explanation: "This is Settings. Tap it to change how your phone works."),
-        AppTile(id: "appstore", displayName: "App Store", systemImage: "bag.fill", tint: .blue,
-                explanation: "Th is the App Store. Tap it to download new apps.")
-    ]
+enum PTVSimScreen: Equatable {
+    case forYou
+    case journeyPlanner
+    case destinationSearch
+    case results
+}
+
+enum PTVSimStep: Equatable, CaseIterable {
+    case forYouOpened
+    case tapFrom
+    case typeOrigin
+    case tapToAndTypeDestination
+    case selectingDestination
+    case readyToSearch
+    case showingResults
+
+    var screen: PTVSimScreen {
+        switch self {
+        case .forYouOpened: return .forYou
+        case .tapFrom, .typeOrigin, .readyToSearch: return .journeyPlanner
+        case .tapToAndTypeDestination, .selectingDestination: return .destinationSearch
+        case .showingResults: return .results
+        }
+    }
+
+    /// The caption TapTalk overlays/speaks at this step. `origin`/`destination`
+    /// are interpolated in so the walkthrough matches whatever the user
+    /// actually said, not just the Box Hill -> Melbourne Central example.
+    func caption(origin: String, destination: String) -> String {
+        switch self {
+        case .forYouOpened:
+            return "You're in PTV now — tap Journey Planner."
+        case .tapFrom:
+            return "Now tap From."
+        case .typeOrigin:
+            return "Type in \(origin)."
+        case .tapToAndTypeDestination:
+            return "Now tap To and type \(destination)."
+        case .selectingDestination:
+            return "Tap \(destination) to add it as your destination."
+        case .readyToSearch:
+            return "Both fields are filled — tap Search to see your options."
+        case .showingResults:
+            return "Here's your journey — first service leaves shortly from Platform 2. Anything else you need help with?"
+        }
+    }
+
+    var next: PTVSimStep? {
+        let all = PTVSimStep.allCases
+        guard let index = all.firstIndex(of: self), index + 1 < all.count else { return nil }
+        return all[index + 1]
+    }
 }

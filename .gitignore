@@ -1,0 +1,13 @@
+# Secrets — never commit real API keys
+Secrets.swift
+
+# Xcode
+.DS_Store
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM

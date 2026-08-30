@@ -2,7 +2,17 @@
 //  ConversationTurn.swift
 //  TapTalk
 //
-//  Created by Emma Daujat on 29/8/2026.
-//
 
 import Foundation
+
+struct ConversationTurn: Identifiable, Equatable {
+    enum Speaker: Equatable {
+        case taptalk
+        case user
+    }
+
+    let id = UUID()
+    let speaker: Speaker
+    let text: String
+    let timestamp = Date()
+}
