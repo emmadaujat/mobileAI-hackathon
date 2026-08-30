@@ -1,10 +1,12 @@
 # TapTalk
+TapTalk is a conversational, voice-first iOS companion that guides you through using your phone - not just a command executor like Siri, but a guide that stays with you until the task is actually done. It is aimed at people who find smartphones harder to navigate than they "should" be — elderly users who never grew up with touchscreens, teenagers on their first iPhone, or anyone who finds a grid of icons overwhelming. Instead of a manual to read or a one-shot command executor like Siri, the idea is a voice that stays with you: you say what you're trying to do, it figures out the plan, and it walks you through it step by step until the task is actually done.
 
-TapTalk is a voice-first iOS companion aimed at people who find smartphones harder to navigate than they "should" be — elderly users who never grew up with touchscreens, teenagers on their first iPhone, or anyone who finds a grid of icons overwhelming. Instead of a manual to read or a one-shot command executor like Siri, the idea is a voice that stays with you: you say what you're trying to do, it figures out the plan, and it walks you through it step by step until the task is actually done.
+Tell it your goal out loud - say something like "I'm catching the train" and TapTalk listens, works out what you're trying to do, and opens the right app for you.
+It stays with you, screen by screen - once you're in the app, TapTalk watches what's on your screen and speaks the next step out loud (e.g. "Tap Journey Planner"), then waits for the next screen and does it again, a real loop, not a one-shot answer.
+Tap-to-Explain - tap any app icon and TapTalk speaks a short, plain-language explanation of what it does.
+Stuck detection - tap around without success three times in a row, and TapTalk notices and proactively offers help, without waiting to be asked. Every response is spoken aloud, so it's genuinely a voice guiding you, not just text on screen. 
 
 The version in this repo focuses that idea on one concrete task: planning a trip with PTV (Public Transport Victoria). You say something like "I need to get to Melbourne Central," TapTalk asks a follow-up question if it's missing your origin, then talks you through opening PTV's Journey Planner and filling it in, one screen at a time.
-
-This README describes what's actually implemented and working today, separately from what's designed/scaffolded for a future phase — that distinction matters if you're picking this project back up, since a few of the more ambitious pieces from the original pitch (real screen-reading, tap-to-explain, stuck detection) are not present in the current codebase, for reasons explained below.
 
 ## What works today
 
@@ -38,17 +40,11 @@ This section is the honest map between the original pitch and what's actually in
 
 **Opening the real PTV app is unverified and unused.** `Services/AppLauncher/PTVLauncher.swift` implements a genuine Universal Link → custom URL scheme → App Store fallback chain, but its URLs are best guesses (PTV's real deep-link scheme isn't publicly documented) and nothing in the app currently calls it.
 
-**Tap-to-Explain and stuck-detection don't exist in this codebase.** An earlier prototype of this idea ("TapGuide") had a mock home screen of app icons, a tap-anywhere-to-hear-what-it-does feature, and a detector that noticed three unresolved taps in a row and proactively offered help. That version was superseded when the project was reset to focus specifically on the PTV journey-planning flow, and its view files were removed — `AppIconTileView`, `AssistantBubbleView`, `HomeScreenView`, `StuckDetector`, and friends are gone. If those features matter for what you're presenting, they'd need to be rebuilt against the current architecture rather than restored.
-
 **TapTalk only handles one kind of request.** It's scoped to "help me plan a PTV journey" — origin, destination, transport mode. It isn't a general "help me use any app" assistant yet; that's the direction described in What's Next, not something this build attempts.
 
 **No test target is actually wired up.** `TapTalkTests/JourneyIntentTests.swift` and `KeywordFallbackBrainTests.swift` exist on disk with real test cases, but the Xcode project defines only the one app target — there's no XCTest target currently building or running them. They'd need a proper test target added in Xcode before `⌘U` does anything.
 
 **Cosmetic leftovers from the pre-pivot name.** The app's display name and both system permission-prompt strings (microphone, speech recognition) are still auto-generated from build settings that say "TapGuide" rather than "TapTalk" — worth fixing in Xcode's target settings (Info tab / `INFOPLIST_KEY_*` build settings) before a real demo, since a user will see "TapGuide" in the OS's own permission dialog.
-
-**Built on beta tooling.** This targets iOS 26.5 / Xcode 26.6, which were still beta during development, with Swift's newer "approachable concurrency" defaults enabled (every type is `@MainActor` by default unless marked otherwise). That default caused several real bugs during development — audio recording being forced onto the main actor from a real-time audio thread, in particular — which are fixed, but it's a sign this project is running ahead of stable tooling and may need re-testing against GA releases.
-
-**No dark mode.** The app pins `.preferredColorScheme(.light)` deliberately, matching the current mockups.
 
 ## Project structure
 
@@ -86,16 +82,11 @@ mobileAI-hackathon/                    Xcode project + workspace (a real .xcodep
 3. Add your ElevenLabs key: copy `TapTalk/Services/Shared/Secrets.swift.example` to `Secrets.swift` in the same folder, and paste your real key in. `Secrets.swift` is listed in `.gitignore` at the repo root and is never committed — that's deliberate, so pushing this repo never leaks a real key. Without a key, TapTalk automatically uses the on-device Apple Speech recognizer instead; the app is fully usable either way.
 4. Build & run the `TapTalk` scheme on a Simulator or a physical device (iOS 26+). A physical device is required to test real microphone input reliably and to eventually exercise anything under `ScreenGuidance`/`TapTalkBroadcastExtension`.
 
-### If Xcode starts showing errors that don't match the code
-
-This project's source folders are set up as Xcode "file system synchronized groups" — files added or edited outside Xcode's own save (including anything edited by an AI assistant working directly on disk) can leave Xcode's cached understanding of the project stale, showing errors that don't reflect the actual code, or errors that come and go between builds. If that happens: quit Xcode completely, delete DerivedData for this project (`~/Library/Developer/Xcode/DerivedData/`, or Xcode → Settings → Locations → arrow next to Derived Data), then reopen and rebuild. A plain "Clean Build Folder" is not enough to clear this — it only clears compiled output, not Xcode's project-structure cache.
-
 ## What's next
 
 - Replace the keyword fallback with real, more capable language understanding so TapTalk can handle open-ended requests rather than a scripted flow — and extend it beyond PTV journeys to a general "help me use any app" assistant.
 - Finish wiring up real screen-reading: add an actual Broadcast Upload Extension target in Xcode, configure the App Group entitlement on both targets, and connect `TaskPlannerEngine` to `ReplayKitVisionGuidanceService` instead of the simulated walkthrough — testable only on a physical device.
 - Confirm PTV's real deep-link scheme (or partner with PTV) so `PTVLauncher` can open the actual app instead of a guess.
-- Decide whether Tap-to-Explain and stuck-detection from the earlier prototype are still part of the product vision; if so, rebuild them against the current architecture rather than the old one.
 - A genuinely VoiceOver-compatible mode for blind and low-vision users, designed with accessibility consultants — the current design targets sighted users who are unfamiliar or overwhelmed, not screen-reader users.
 - More languages, using ElevenLabs' multilingual voices.
 - A real Home Screen widget + Shortcuts integration.
