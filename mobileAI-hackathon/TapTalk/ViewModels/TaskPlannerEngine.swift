@@ -109,9 +109,22 @@ final class TaskPlannerEngine: ObservableObject {
 
     // MARK: - Core loop
 
-    private func speak(_ text: String, generation: Int) async {
+    /// FIX: `updatesPlannerState` defaults to `true` for the plain voice loop
+    /// (idle/listening/thinking screens, which rely on `.speaking(text)` to
+    /// show the right orb state and subtitle). The two guided-walkthrough
+    /// call sites below pass `false`: they set `plannerState = .guiding(step)`
+    /// immediately before calling this, and `PTVSimulationView` already shows
+    /// its own caption via `viewModel.currentCaption` — so if this function
+    /// were allowed to overwrite `plannerState` to `.speaking(text)` here, it
+    /// would immediately un-set `.guiding`, and `SessionContainerView` would
+    /// switch straight back to the plain voice screen before the simulated
+    /// PTV screen was ever actually visible. That was the root cause of the
+    /// guided walkthrough never visibly appearing.
+    private func speak(_ text: String, generation: Int, updatesPlannerState: Bool = true) async {
         guard isCurrent(generation) else { return }
-        plannerState = .speaking(text)
+        if updatesPlannerState {
+            plannerState = .speaking(text)
+        }
         conversation.append(ConversationTurn(speaker: .taptalk, text: text))
         await voiceOutput.speak(text)
     }
@@ -220,14 +233,14 @@ final class TaskPlannerEngine: ObservableObject {
         }
         ptvSimulationViewModel = simulation
         plannerState = .guiding(.forYouOpened)
-        await speak(PTVSimStep.forYouOpened.caption(origin: currentIntent.origin ?? "", destination: currentIntent.destination ?? ""), generation: generation)
+        await speak(PTVSimStep.forYouOpened.caption(origin: currentIntent.origin ?? "", destination: currentIntent.destination ?? ""), generation: generation, updatesPlannerState: false)
     }
 
     private func handleGuidanceAdvanced(_ step: PTVSimStep, generation: Int) async {
         guard isCurrent(generation) else { return }
         plannerState = .guiding(step)
         let caption = step.caption(origin: currentIntent.origin ?? "", destination: currentIntent.destination ?? "")
-        await speak(caption, generation: generation)
+        await speak(caption, generation: generation, updatesPlannerState: false)
         guard isCurrent(generation) else { return }
 
         if step == .showingResults {
